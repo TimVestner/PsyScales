@@ -43,6 +43,52 @@
         a:hover {
             text-decoration: underline;
         }
+        /* Add search box styling */
+        #searchBox {
+            margin-bottom: 20px;
+            padding: 5px;
+            width: 300px;
+        }
+        
+        /* Keep existing styles, add filter container */
+        .filter-container {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        th[data-sort] {
+            position: relative;
+            padding-right: 20px;
+        }
+
+        th[data-sort]::after {
+            content: ' ⇅';
+            color: #999;
+            font-size: 0.8em;
+            position: absolute;
+            right: 5px;
+        }
+
+        th[data-sort]:hover::after {
+            color: #666;
+        }
+
+        th.active-sort::after {
+            content: '';
+        }
+
+        /* Keep existing styles */
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .filter-container { margin-bottom: 20px; display: flex; gap: 20px; align-items: center; }
+        #searchBox { margin-bottom: 0; padding: 5px; width: 300px; }
+        #categoryFilter { padding: 5px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; cursor: pointer; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        a { color: #0645ad; text-decoration: none; }
+        a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -50,19 +96,24 @@
     <p>Created by Zak Ashworth and Tim Vestner</p>
     <p>&nbsp;</p>
     <p>Use the dropdown below to filter by category. Use the table headers to sort.</p>
-    <select id="categoryFilter">
-        <option value="">All Categories</option>
-    </select>
+    
+    
+    <div class="filter-container">
+        <input type="text" id="searchBox" placeholder="Search Name, Measures, or Subscales...">
+        <select id="categoryFilter">
+            <option value="">All Categories</option>
+        </select>
+    </div>
 
     <table id="scalesTable">
         <thead>
             <tr>
-                <th data-sort="abbreviation">Abbreviation ▼</th>
-                <th data-sort="name">Name ▼</th>
-                <th data-sort="measures">Measures ▼</th>
+                <th data-sort="abbreviation">Abbreviation</th>
+                <th data-sort="name" class="active-sort">Name ▼</th>
+                <th data-sort="measures">Measures</th>
                 <th>Subscales</th>
-                <th data-sort="category">Category ▼</th>
-                <th data-sort="items">Items ▼</th>
+                <th data-sort="category">Category</th>
+                <th data-sort="items">Items</th>
                 <th>Paper Reference</th>
                 <th>Link</th>
             </tr>
@@ -72,23 +123,55 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <script>
-        let scalesData = [];
-        // let currentSort = { column: null, direction: 1 };
+      let scalesData = [];
         let currentSort = { column: 'name', direction: 1 };
+        let filteredData = [];
 
-        // Load and parse CSV data
         Papa.parse("scales.csv", {
             download: true,
             header: true,
             dynamicTyping: true,
             complete: function(results) {
                 scalesData = results.data;
-                scalesData.sort((a, b) => a.Name.localeCompare(b.Name));
-                populateTable(scalesData);
-                populateCategoryFilter();
+                initializeFiltersAndSort();
+                applyFiltersAndSort();
+                populateTable(filteredData);
                 addSortListeners();
             }
         });
+
+        function initializeFiltersAndSort() {
+            populateCategoryFilter();
+            scalesData.sort((a, b) => a.Name.localeCompare(b.Name));
+        }
+
+        function applyFiltersAndSort() {
+            // Apply filters
+            const searchQuery = document.getElementById('searchBox').value.toLowerCase();
+            const selectedCategory = document.getElementById('categoryFilter').value;
+            
+            filteredData = scalesData.filter(scale => {
+                const matchesCategory = !selectedCategory || scale.Category === selectedCategory;
+                const matchesSearch = !searchQuery || 
+                    scale.Name.toLowerCase().includes(searchQuery) ||
+                    scale.Measures.toLowerCase().includes(searchQuery) ||
+                    scale.Subscales.toLowerCase().includes(searchQuery);
+                
+                return matchesCategory && matchesSearch;
+            });
+
+            // Apply sorting
+            filteredData.sort((a, b) => {
+                const sortKey = currentSort.column.charAt(0).toUpperCase() + currentSort.column.slice(1);
+                const aVal = a[sortKey];
+                const bVal = b[sortKey];
+                
+                if (typeof aVal === 'string') {
+                    return aVal.localeCompare(bVal) * currentSort.direction;
+                }
+                return (aVal - bVal) * currentSort.direction;
+            });
+        }
 
         function populateTable(data) {
             const tbody = document.getElementById('tableBody');
@@ -108,6 +191,18 @@
                 `;
                 tbody.appendChild(row);
             });
+
+            // Update sort indicators
+            document.querySelectorAll('th[data-sort]').forEach(header => {
+                header.classList.remove('active-sort');
+                header.textContent = header.textContent.replace(/▼|▲/g, '').trim();
+            });
+
+            const activeHeader = document.querySelector(`th[data-sort="${currentSort.column}"]`);
+            if (activeHeader) {
+                activeHeader.classList.add('active-sort');
+                activeHeader.textContent += currentSort.direction === 1 ? ' ▼' : ' ▲';
+            }
         }
 
         function populateCategoryFilter() {
@@ -122,10 +217,7 @@
             });
 
             filter.addEventListener('change', () => {
-                const selectedCategory = filter.value;
-                const filteredData = selectedCategory ? 
-                    scalesData.filter(scale => scale.Category === selectedCategory) : 
-                    scalesData;
+                applyFiltersAndSort();
                 populateTable(filteredData);
             });
         }
@@ -134,7 +226,6 @@
             document.querySelectorAll('th[data-sort]').forEach(header => {
                 header.addEventListener('click', () => {
                     const sortColumn = header.dataset.sort;
-                    const textContent = header.textContent;
                     
                     if (currentSort.column === sortColumn) {
                         currentSort.direction *= -1;
@@ -143,21 +234,15 @@
                         currentSort.direction = 1;
                     }
 
-                    header.textContent = textContent.replace(/▼|▲/, '') + 
-                        (currentSort.direction === 1 ? ' ▼' : ' ▲');
-
-                    scalesData.sort((a, b) => {
-                        const valA = a[sortColumn.charAt(0).toUpperCase() + sortColumn.slice(1)];
-                        const valB = b[sortColumn.charAt(0).toUpperCase() + sortColumn.slice(1)];
-                        
-                        if (typeof valA === 'string') {
-                            return valA.localeCompare(valB) * currentSort.direction;
-                        }
-                        return (valA - valB) * currentSort.direction;
-                    });
-
-                    populateTable(scalesData);
+                    applyFiltersAndSort();
+                    populateTable(filteredData);
                 });
+            });
+
+            // Add input listener for search box
+            document.getElementById('searchBox').addEventListener('input', () => {
+                applyFiltersAndSort();
+                populateTable(filteredData);
             });
         }
     </script>
