@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scales Database</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        #categoryFilter {
+            margin-bottom: 20px;
+            padding: 5px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        a {
+            color: #0645ad;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Psychological Scales Database</h1>
+    <p>Created by Zak Ashworth and Tim Vestner</p>
+    <p>&nbsp;</p>
+    <p>Use the dropdown below to filter by category. Use the table headers to sort.</p>
+    <select id="categoryFilter">
+        <option value="">All Categories</option>
+    </select>
+
+    <table id="scalesTable">
+        <thead>
+            <tr>
+                <th data-sort="abbreviation">Abbreviation ▼</th>
+                <th data-sort="name">Name ▼</th>
+                <th data-sort="measures">Measures ▼</th>
+                <th>Subscales</th>
+                <th data-sort="category">Category ▼</th>
+                <th data-sort="items">Items ▼</th>
+                <th>Paper Reference</th>
+                <th>Link</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        let scalesData = [];
+        // let currentSort = { column: null, direction: 1 };
+        let currentSort = { column: 'name', direction: 1 };
+
+        // Load and parse CSV data
+        Papa.parse("scales.csv", {
+            download: true,
+            header: true,
+            dynamicTyping: true,
+            complete: function(results) {
+                scalesData = results.data;
+                scalesData.sort((a, b) => a.Name.localeCompare(b.Name));
+                populateTable(scalesData);
+                populateCategoryFilter();
+                addSortListeners();
+            }
+        });
+
+        function populateTable(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            data.forEach(scale => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${scale.Abbreviation}</td>
+                    <td>${scale.Name}</td>
+                    <td>${scale.Measures}</td>
+                    <td>${scale.Subscales}</td>
+                    <td>${scale.Category}</td>
+                    <td>${scale.Items}</td>
+                    <td>${scale['Paper Reference']}</td>
+                    <td><a href="${scale.link}" target="_blank">link</a></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function populateCategoryFilter() {
+            const categories = [...new Set(scalesData.map(scale => scale.Category))];
+            const filter = document.getElementById('categoryFilter');
+            
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                filter.appendChild(option);
+            });
+
+            filter.addEventListener('change', () => {
+                const selectedCategory = filter.value;
+                const filteredData = selectedCategory ? 
+                    scalesData.filter(scale => scale.Category === selectedCategory) : 
+                    scalesData;
+                populateTable(filteredData);
+            });
+        }
+
+        function addSortListeners() {
+            document.querySelectorAll('th[data-sort]').forEach(header => {
+                header.addEventListener('click', () => {
+                    const sortColumn = header.dataset.sort;
+                    const textContent = header.textContent;
+                    
+                    if (currentSort.column === sortColumn) {
+                        currentSort.direction *= -1;
+                    } else {
+                        currentSort.column = sortColumn;
+                        currentSort.direction = 1;
+                    }
+
+                    header.textContent = textContent.replace(/▼|▲/, '') + 
+                        (currentSort.direction === 1 ? ' ▼' : ' ▲');
+
+                    scalesData.sort((a, b) => {
+                        const valA = a[sortColumn.charAt(0).toUpperCase() + sortColumn.slice(1)];
+                        const valB = b[sortColumn.charAt(0).toUpperCase() + sortColumn.slice(1)];
+                        
+                        if (typeof valA === 'string') {
+                            return valA.localeCompare(valB) * currentSort.direction;
+                        }
+                        return (valA - valB) * currentSort.direction;
+                    });
+
+                    populateTable(scalesData);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
